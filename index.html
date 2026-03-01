@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>月間スケジュールアプリ</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         :root {
             /* ライトモード変数（柔らかい色使いに調整 & Glassmorphism） */
@@ -1348,18 +1348,14 @@
             color: var(--text-muted);
         }
 
-        /* 画像用エリア（非表示） */
+        /* 画像/PDF出力用エリア（常に白背景を明示） */
         .capture-area {
-            position: absolute;
-            left: 0;
-            top: 0;
-            z-index: -1000;
-            opacity: 0.01;
-            pointer-events: none;
             width: 800px;
-            background: #fff;
+            background-color: #ffffff;
             font-family: 'Noto Sans JP', sans-serif;
             padding: 32px;
+            box-sizing: border-box;
+            color: #1e293b;
         }
 
         .capture-title {
@@ -1543,12 +1539,12 @@
 </head>
 
 <body>
-    <!-- モーダル: 画像出力形式選択 -->
+    <!-- モーダル: ダウンロード形式選択 -->
     <div class="modal-overlay" id="modal-export-choose">
         <div class="modal-center">
-            <div class="modal-card" style="max-width: 450px;">
+            <div class="modal-card" style="max-width: 480px;">
                 <div class="modal-header">
-                    <h2>ファイルに保存</h2>
+                    <h2>📥 ダウンロード</h2>
                     <button class="btn-close-icon" onclick="closeExportModal()" type="button">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
                             stroke="currentColor" width="24" height="24">
@@ -1556,48 +1552,62 @@
                         </svg>
                     </button>
                 </div>
-                <div class="modal-body">
-                    <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 24px;">
-                        保存する形式とレイアウトを順番に選んでください。</p>
+                <div class="modal-body" style="padding: 24px;">
+                    <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.6;">
+                        保存したい形式とレイアウトを選んで、ダウンロードボタンを押してください。</p>
 
+                    <!-- ステップ1: 保存形式 -->
                     <div style="margin-bottom: 20px;">
                         <div
-                            style="margin-bottom: 12px; font-weight: bold; color: var(--text-color); display:flex; align-items:center; gap:8px;">
+                            style="margin-bottom: 10px; font-weight: 700; color: var(--text-color); display:flex; align-items:center; gap:8px; font-size: 0.9rem;">
                             <span
-                                style="background:var(--primary); color:#fff; width:20px; height:20px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px;">1</span>
+                                style="background:var(--primary); color:#fff; width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;">1</span>
                             保存形式を選択
                         </div>
-                        <div class="export-step-grid" style="display: grid; grid-template-columns: 1fr; gap: 12px;">
-                            <button class="btn-step-option" id="btn-fmt-image" onclick="selectExportFormat('image')">
-                                <div class="icon" style="font-size:24px; margin-bottom:4px;">🖼️</div>
-                                <div class="label" style="font-weight:bold;">画像 (PNG)</div>
+                        <div style="display: flex; gap: 12px;">
+                            <button class="btn-step-option" id="btn-fmt-image" onclick="selectExportFormat('image')"
+                                type="button"
+                                style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; padding:16px 12px; border:2px solid var(--border-color); border-radius:16px; background:var(--container-bg); cursor:pointer; transition:all 0.2s; color:var(--text-color); font-family:inherit;">
+                                <span style="font-size:28px;">🖼️</span>
+                                <span style="font-weight:700; font-size:0.85rem;">画像 (PNG)</span>
+                            </button>
+                            <button class="btn-step-option" id="btn-fmt-pdf" onclick="selectExportFormat('pdf')"
+                                type="button"
+                                style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; padding:16px 12px; border:2px solid var(--border-color); border-radius:16px; background:var(--container-bg); cursor:pointer; transition:all 0.2s; color:var(--text-color); font-family:inherit;">
+                                <span style="font-size:28px;">📄</span>
+                                <span style="font-weight:700; font-size:0.85rem;">文書 (PDF)</span>
                             </button>
                         </div>
                     </div>
 
-                    <div style="margin-bottom: 32px;">
+                    <!-- ステップ2: レイアウト -->
+                    <div style="margin-bottom: 24px;">
                         <div
-                            style="margin-bottom: 12px; font-weight: bold; color: var(--text-color); display:flex; align-items:center; gap:8px;">
+                            style="margin-bottom: 10px; font-weight: 700; color: var(--text-color); display:flex; align-items:center; gap:8px; font-size: 0.9rem;">
                             <span
-                                style="background:var(--primary); color:#fff; width:20px; height:20px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px;">2</span>
+                                style="background:var(--primary); color:#fff; width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;">2</span>
                             レイアウトを選択
                         </div>
-                        <div class="export-step-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                            <button class="btn-step-option" id="btn-layout-cal"
-                                onclick="selectExportLayout('calendar')">
-                                <div class="icon" style="font-size:24px; margin-bottom:4px;">📅</div>
-                                <div class="label" style="font-weight:bold;">カレンダー形式</div>
+                        <div style="display: flex; gap: 12px;">
+                            <button class="btn-step-option" id="btn-layout-cal" onclick="selectExportLayout('calendar')"
+                                type="button"
+                                style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; padding:16px 12px; border:2px solid var(--border-color); border-radius:16px; background:var(--container-bg); cursor:pointer; transition:all 0.2s; color:var(--text-color); font-family:inherit;">
+                                <span style="font-size:28px;">📅</span>
+                                <span style="font-weight:700; font-size:0.85rem;">カレンダー形式</span>
                             </button>
-                            <button class="btn-step-option" id="btn-layout-list" onclick="selectExportLayout('list')">
-                                <div class="icon" style="font-size:24px; margin-bottom:4px;">📋</div>
-                                <div class="label" style="font-weight:bold;">リスト形式</div>
+                            <button class="btn-step-option" id="btn-layout-list" onclick="selectExportLayout('list')"
+                                type="button"
+                                style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; padding:16px 12px; border:2px solid var(--border-color); border-radius:16px; background:var(--container-bg); cursor:pointer; transition:all 0.2s; color:var(--text-color); font-family:inherit;">
+                                <span style="font-size:28px;">📋</span>
+                                <span style="font-weight:700; font-size:0.85rem;">リスト形式</span>
                             </button>
                         </div>
                     </div>
 
-                    <button class="btn-save" id="btn-execute-export" onclick="executeExport()" disabled
-                        style="width:100%; padding:14px; font-size:16px;">
-                        この内容で保存する
+                    <!-- ダウンロードボタン -->
+                    <button class="btn-save" id="btn-execute-export" onclick="executeExport()" type="button" disabled
+                        style="width:100%; padding:16px; font-size:16px; font-weight:700; border-radius:9999px; border:none; cursor:pointer; transition: all 0.2s;">
+                        ⬇️ この内容でダウンロード
                     </button>
                 </div>
             </div>
@@ -2443,53 +2453,153 @@
             calendarList.innerHTML = html;
         }
 
-        // ===== 拡張: エクスポート・レンダリング =====
-        function buildCaptureContent(type = 'list') {
-            const capture = document.createElement('div');
-            capture.className = 'capture-area';
+        // ===== エクスポート用HTML生成（テーブルベース）=====
+        // html2canvasが最も確実にレンダリングできる<table>を使用
+        function buildCaptureContent(type) {
+            var wrap = document.createElement('div');
+            wrap.style.cssText = 'background-color:#ffffff; color:#1e293b; font-family:sans-serif; padding:24px; box-sizing:border-box;';
+            wrap.style.width = (type === 'calendar') ? '1100px' : '700px';
+            wrap.style.position = 'absolute';
+            wrap.style.left = '-9999px';
+            wrap.style.top = '0';
 
-            // HTML2Canvas/JS PDF が確実にサイズとスタイルを読めるように
-            // 極端な座標は避け、ほぼ透明なオーバーレイとして画面裏に配置する
-            capture.style.position = 'absolute';
-            capture.style.top = '0';
-            capture.style.left = '0';
-            capture.style.zIndex = '-1000';
-            capture.style.opacity = '0.01';
-            capture.style.pointerEvents = 'none';
+            var m = baseDate.getMonth() + 1;
+            var y = baseDate.getFullYear();
 
-            capture.style.width = type === 'calendar' ? '1200px' : '800px';
-            capture.style.backgroundColor = '#ffffff';
-            capture.style.padding = '32px';
-            capture.style.boxSizing = 'border-box';
-
-            // .darkモードの環境変数に負けないように内部要素のテキストも強制設定
-            // これは capture 自体の子要素全てに再定義された変数を上書きさせる効果がある
-            capture.style.setProperty('--text-color', '#1e293b', 'important');
-            capture.style.setProperty('--text-muted', '#64748b', 'important');
-            capture.style.setProperty('--border-color', '#e2e8f0', 'important');
-            capture.style.setProperty('--cal-header-bg', '#f8fafc', 'important');
-            capture.style.setProperty('--bg-color', '#ffffff', 'important');
-            capture.style.setProperty('--container-bg', '#ffffff', 'important');
-
-            // クラスに強制的にlightの変数を適用するためのラッパーを付与
-            capture.classList.remove('dark');
-
-            const m = baseDate.getMonth() + 1;
-            const y = baseDate.getFullYear();
-
-            capture.innerHTML = `
-                <div class="capture-title" style="font-size: 24px; margin-bottom: 24px; font-weight: bold; color: #1e293b; display: flex; align-items: center; gap: 8px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="32" height="32" style="color: #0ea5e9;"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
-                    ${y}年 ${m}月 ${calendarTitle}
-                </div>
-            `;
+            // タイトル行
+            wrap.innerHTML = '<div style="font-size:20px; font-weight:bold; color:#1e293b; background-color:#ffffff; margin-bottom:16px; padding:8px 0;">' +
+                y + '年 ' + m + '月 ' + calendarTitle +
+                '</div>';
 
             if (type === 'calendar') {
-                renderCaptureCalendarGrid(capture, y, m);
+                wrap.innerHTML += buildCalendarTable(y, m);
             } else {
-                renderCaptureList(capture, y, m);
+                wrap.innerHTML += buildListTable(y, m);
             }
-            return capture;
+            return wrap;
+        }
+
+        // --- リスト形式のテーブル生成 ---
+        function buildListTable(y, m) {
+            var daysCount = new Date(y, m, 0).getDate();
+            var dowNames = ['日', '月', '火', '水', '木', '金', '土'];
+            var rows = '';
+            var found = false;
+
+            for (var day = 1; day <= daysCount; day++) {
+                var d = new Date(y, m - 1, day);
+                var ds = fmt(d);
+                var evts = eventsList.filter(function (e) { return e.date === ds; })
+                    .sort(function (a, b) { return a.startTime.localeCompare(b.startTime); });
+                if (evts.length === 0) continue;
+                found = true;
+
+                var hc = '#1e293b';
+                if (d.getDay() === 0) hc = '#ef4444';
+                if (d.getDay() === 6) hc = '#0ea5e9';
+
+                rows += '<tr><td colspan="2" style="background-color:#f8fafc; color:' + hc + '; font-weight:bold; font-size:14px; padding:10px 8px; border-bottom:2px solid #e2e8f0;">' +
+                    m + '/' + day + ' (' + dowNames[d.getDay()] + ')' +
+                    '</td></tr>';
+
+                for (var i = 0; i < evts.length; i++) {
+                    var ev = evts[i];
+                    var tt = ev.isAllDay ? '終日' : (ev.startTime + ' ～ ' + ev.endTime);
+                    var bg = '#f1f5f9', tc = '#1e293b';
+                    if (ev.color === 'sky') { bg = '#e0f2fe'; tc = '#0369a1'; }
+                    if (ev.color === 'emerald') { bg = '#d1fae5'; tc = '#047857'; }
+                    if (ev.color === 'rose') { bg = '#ffe4e6'; tc = '#e11d48'; }
+                    if (ev.color === 'amber') { bg = '#fef3c7'; tc = '#b45309'; }
+                    if (ev.color === 'purple') { bg = '#f3e8ff'; tc = '#7e22ce'; }
+
+                    rows += '<tr>' +
+                        '<td style="background-color:' + bg + '; color:' + tc + '; font-size:12px; font-weight:bold; padding:8px; width:120px; border-bottom:1px solid #e2e8f0; vertical-align:top;">' + tt + '</td>' +
+                        '<td style="background-color:' + bg + '; color:' + tc + '; font-size:14px; font-weight:bold; padding:8px; border-bottom:1px solid #e2e8f0; vertical-align:top;">' + ev.title +
+                        (ev.desc ? '<br><span style="font-size:12px; font-weight:normal; color:' + tc + ';">' + ev.desc + '</span>' : '') +
+                        '</td>' +
+                        '</tr>';
+                }
+            }
+
+            if (!found) {
+                rows = '<tr><td style="background-color:#ffffff; color:#94a3b8; text-align:center; padding:40px; font-size:14px;">この月には予定がありません</td></tr>';
+            }
+
+            return '<table style="width:100%; border-collapse:collapse; background-color:#ffffff; border:1px solid #e2e8f0;">' + rows + '</table>';
+        }
+
+        // --- カレンダー形式のテーブル生成 ---
+        function buildCalendarTable(y, m) {
+            var firstDay = new Date(y, m - 1, 1).getDay();
+            var daysCount = new Date(y, m, 0).getDate();
+            var dowLabels = ['日', '月', '火', '水', '木', '金', '土'];
+            var dowColors = ['#ef4444', '#1e293b', '#1e293b', '#1e293b', '#1e293b', '#1e293b', '#0ea5e9'];
+
+            var header = '<tr>';
+            for (var i = 0; i < 7; i++) {
+                header += '<th style="background-color:#f0f4f8; color:' + dowColors[i] + '; font-size:13px; font-weight:bold; padding:10px 4px; text-align:center; border:1px solid #e2e8f0;">' + dowLabels[i] + '</th>';
+            }
+            header += '</tr>';
+
+            var cells = '';
+            var cellCount = 0;
+            var dayNum = 1;
+
+            cells += '<tr>';
+            for (var blank = 0; blank < firstDay; blank++) {
+                cells += '<td style="background-color:#f8fafc; border:1px solid #e2e8f0; height:100px; vertical-align:top; padding:4px;"></td>';
+                cellCount++;
+            }
+
+            while (dayNum <= daysCount) {
+                if (cellCount > 0 && cellCount % 7 === 0) {
+                    cells += '</tr><tr>';
+                }
+
+                var dateObj = new Date(y, m - 1, dayNum);
+                var ds = fmt(dateObj);
+                var dow = dateObj.getDay();
+                var dc = '#1e293b';
+                if (dow === 0) dc = '#ef4444';
+                if (dow === 6) dc = '#0ea5e9';
+
+                var evts = eventsList.filter(function (e) { return e.date === ds; })
+                    .sort(function (a, b) { return a.startTime.localeCompare(b.startTime); });
+
+                var evContent = '';
+                for (var ei = 0; ei < evts.length; ei++) {
+                    var ev = evts[ei];
+                    var tt = ev.isAllDay ? '終日' : (ev.startTime + '～' + ev.endTime);
+                    var bg = '#e0f2fe', tc = '#0369a1';
+                    if (ev.color === 'emerald') { bg = '#d1fae5'; tc = '#047857'; }
+                    if (ev.color === 'rose') { bg = '#ffe4e6'; tc = '#e11d48'; }
+                    if (ev.color === 'amber') { bg = '#fef3c7'; tc = '#b45309'; }
+                    if (ev.color === 'purple') { bg = '#f3e8ff'; tc = '#7e22ce'; }
+
+                    evContent += '<div style="background-color:' + bg + '; color:' + tc + '; padding:2px 4px; margin-bottom:3px; font-size:10px; line-height:1.3; border-radius:3px;">' +
+                        '<span style="font-weight:bold; color:' + tc + ';">' + tt + '</span><br>' +
+                        '<span style="font-weight:bold; color:' + tc + ';">' + ev.title + '</span>' +
+                        '</div>';
+                }
+
+                cells += '<td style="background-color:#ffffff; border:1px solid #e2e8f0; height:100px; width:14.28%; vertical-align:top; padding:4px;">' +
+                    '<div style="text-align:right; font-weight:bold; font-size:13px; color:' + dc + '; background-color:#ffffff; margin-bottom:3px;">' + dayNum + '</div>' +
+                    evContent +
+                    '</td>';
+
+                dayNum++;
+                cellCount++;
+            }
+
+            var lastRowRem = cellCount % 7;
+            if (lastRowRem > 0) {
+                for (var r = lastRowRem; r < 7; r++) {
+                    cells += '<td style="background-color:#f8fafc; border:1px solid #e2e8f0; height:100px; vertical-align:top; padding:4px;"></td>';
+                }
+            }
+            cells += '</tr>';
+
+            return '<table style="width:100%; border-collapse:collapse; background-color:#ffffff; table-layout:fixed;">' + header + cells + '</table>';
         }
 
         // --- ステップ式エクスポートUI制御 ---
@@ -2507,15 +2617,28 @@
 
         window.selectExportFormat = function (format) {
             selectedExportFormat = format;
-            document.getElementById('btn-fmt-image').classList.toggle('active', format === 'image');
-            document.getElementById('btn-fmt-pdf').classList.toggle('active', format === 'pdf');
+            // ボタンの選択状態を視覚的に切り替え
+            ['btn-fmt-image', 'btn-fmt-pdf'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                const isActive = (id === 'btn-fmt-image' && format === 'image') || (id === 'btn-fmt-pdf' && format === 'pdf');
+                btn.style.borderColor = isActive ? 'var(--primary)' : 'var(--border-color)';
+                btn.style.background = isActive ? 'rgba(56, 189, 248, 0.08)' : 'var(--container-bg)';
+                btn.classList.toggle('active', isActive);
+            });
             checkExportReady();
         };
 
         window.selectExportLayout = function (layout) {
             selectedExportLayout = layout;
-            document.getElementById('btn-layout-cal').classList.toggle('active', layout === 'calendar');
-            document.getElementById('btn-layout-list').classList.toggle('active', layout === 'list');
+            ['btn-layout-cal', 'btn-layout-list'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                const isActive = (id === 'btn-layout-cal' && layout === 'calendar') || (id === 'btn-layout-list' && layout === 'list');
+                btn.style.borderColor = isActive ? 'var(--primary)' : 'var(--border-color)';
+                btn.style.background = isActive ? 'rgba(56, 189, 248, 0.08)' : 'var(--container-bg)';
+                btn.classList.toggle('active', isActive);
+            });
             checkExportReady();
         };
 
@@ -2531,7 +2654,13 @@
         window.resetExportModal = function () {
             selectedExportFormat = null;
             selectedExportLayout = null;
-            document.querySelectorAll('.btn-step-option').forEach(b => b.classList.remove('active'));
+            ['btn-fmt-image', 'btn-fmt-pdf', 'btn-layout-cal', 'btn-layout-list'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                btn.style.borderColor = 'var(--border-color)';
+                btn.style.background = 'var(--container-bg)';
+                btn.classList.remove('active');
+            });
             checkExportReady();
         };
 
@@ -2540,79 +2669,111 @@
             document.getElementById('modal-export-choose').classList.remove('show');
             if (selectedExportFormat === 'image') {
                 exportAsImage(selectedExportLayout);
-            } else {
+            } else if (selectedExportFormat === 'pdf') {
                 exportAsPdf(selectedExportLayout);
             }
         };
 
-        // --- 共通の画像書き出し（PNG） ---
+        // --- PNG画像書き出し（dom-to-image） ---
         function exportAsImage(type = 'calendar') {
             const btn = document.getElementById('btn-export-trigger');
             if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
 
-            document.body.classList.add('exporting');
             const capture = buildCaptureContent(type);
+            // 画面内に配置して描画させる（画面外だとdom-to-imageが描画できない）
+            capture.style.position = 'fixed';
+            capture.style.left = '0';
+            capture.style.top = '0';
+            capture.style.zIndex = '99999';
+            capture.style.opacity = '1';
             document.body.appendChild(capture);
+
             const m = baseDate.getMonth() + 1;
             const y = baseDate.getFullYear();
 
-            // Webフォント描画・レイアウト完了を確実に待機
-            // html2canvasが正しく認識できるように、描画直前に完全に可視化する
-            capture.style.opacity = '1';
-            capture.style.zIndex = '99999';
-            setTimeout(() => {
-                html2canvas(capture, {
-                    backgroundColor: '#ffffff', // 強制的に白背景
-                    scale: 2,
-                    useCORS: true,
-                    logging: false, // ログを出力させない
-                    width: capture.scrollWidth,
-                    height: capture.scrollHeight,
-                    windowWidth: capture.scrollWidth,
-                    windowHeight: capture.scrollHeight,
-                }).then(canvas => {
-                    const link = document.createElement('a');
-                    link.download = `schedule_${y}_${String(m).padStart(2, '0')}_${type}.png`;
-                    link.href = canvas.toDataURL('image/png');
-                    link.click();
-                    cleanupCapture(capture, btn);
-                }).catch(err => {
-                    console.error('Image Export Failed', err);
-                    cleanupCapture(capture, btn);
-                });
-            }, 800); // 描画完了のためのバッファを多めに確保
+            setTimeout(function () {
+                var scale = 2;
+                var origW = capture.scrollWidth;
+                var origH = capture.scrollHeight;
+                domtoimage.toPng(capture, {
+                    width: origW * scale,
+                    height: origH * scale,
+                    style: {
+                        transform: 'scale(' + scale + ')',
+                        transformOrigin: 'top left'
+                    }
+                })
+                    .then(function (dataUrl) {
+                        var link = document.createElement('a');
+                        link.download = 'schedule_' + y + '_' + String(m).padStart(2, '0') + '_' + type + '.png';
+                        link.href = dataUrl;
+                        link.click();
+                        cleanupCapture(capture, btn);
+                    })
+                    .catch(function (err) {
+                        console.error('PNG Export Failed:', err);
+                        alert('画像の書き出しに失敗しました。もう一度お試しください。');
+                        cleanupCapture(capture, btn);
+                    });
+            }, 300);
         }
 
-        // --- PDF書き出し (html2pdfによる直接ダウンロード) ---
+        // --- PDF書き出し（dom-to-image → jsPDF） ---
         function exportAsPdf(type = 'list') {
             const btn = document.getElementById('btn-export-trigger');
             if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
 
-            document.body.classList.add('exporting');
             const capture = buildCaptureContent(type);
+            capture.style.position = 'fixed';
+            capture.style.left = '0';
+            capture.style.top = '0';
+            capture.style.zIndex = '99999';
+            capture.style.opacity = '1';
             document.body.appendChild(capture);
 
             const m = baseDate.getMonth() + 1;
             const y = baseDate.getFullYear();
             const orientation = type === 'calendar' ? 'landscape' : 'portrait';
 
-            setTimeout(() => {
-                const opt = {
-                    margin: [10, 10, 10, 10], // mm
-                    filename: `schedule_${y}_${String(m).padStart(2, '0')}_${type}.pdf`,
-                    image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-                    jsPDF: { unit: 'mm', format: 'a4', orientation: orientation }
-                };
-                html2pdf().set(opt).from(capture).save().then(() => {
-                    cleanupCapture(capture, btn);
-                }).catch(err => {
-                    console.error('PDF Export Failed', err);
-                    cleanupCapture(capture, btn);
-                });
-            }, 500);
-        }
+            setTimeout(function () {
+                var scale = 2;
+                var origW = capture.scrollWidth;
+                var origH = capture.scrollHeight;
+                domtoimage.toPng(capture, {
+                    width: origW * scale,
+                    height: origH * scale,
+                    style: {
+                        transform: 'scale(' + scale + ')',
+                        transformOrigin: 'top left'
+                    }
+                })
+                    .then(function (dataUrl) {
+                        var imgWidth = origW;
+                        var imgHeight = origH;
 
+                        // A4サイズ（mm）に合わせて画像を縮小
+                        var pdf = new jspdf.jsPDF({ orientation: orientation, unit: 'mm', format: 'a4' });
+                        var pageWidth = pdf.internal.pageSize.getWidth();
+                        var pageHeight = pdf.internal.pageSize.getHeight();
+                        var margin = 10;
+                        var maxW = pageWidth - margin * 2;
+                        var maxH = pageHeight - margin * 2;
+
+                        var ratio = Math.min(maxW / imgWidth, maxH / imgHeight);
+                        var w = imgWidth * ratio;
+                        var h = imgHeight * ratio;
+
+                        pdf.addImage(dataUrl, 'PNG', margin, margin, w, h);
+                        pdf.save('schedule_' + y + '_' + String(m).padStart(2, '0') + '_' + type + '.pdf');
+                        cleanupCapture(capture, btn);
+                    })
+                    .catch(function (err) {
+                        console.error('PDF Export Failed:', err);
+                        alert('PDFの書き出しに失敗しました。もう一度お試しください。');
+                        cleanupCapture(capture, btn);
+                    });
+            }, 300);
+        }
         function cleanupCapture(capture, btn) {
             capture.remove();
             document.body.classList.remove('exporting');
@@ -2637,61 +2798,56 @@
                 if (d.getDay() === 6) hdrColor = '#0ea5e9';
 
                 const dayDiv = document.createElement('div');
-                dayDiv.className = 'capture-day';
-                let eventsHtml = events.map(ev => {
-                    const cc = COLOR_CLASSES[ev.color] || COLOR_CLASSES[DEFAULT_COLOR];
-                    const timeText = ev.isAllDay ? '終日' : `${ev.startTime} ～ ${ev.endTime}`;
-                    let bg = '#f1f5f9', border = '#cbd5e1', text = '#1e293b';
-                    if (ev.color === 'sky') { bg = '#e0f2fe'; border = '#bae6fd'; text = '#0369a1'; }
-                    if (ev.color === 'emerald') { bg = '#d1fae5'; border = '#a7f3d0'; text = '#047857'; }
-                    if (ev.color === 'rose') { bg = '#ffe4e6'; border = '#fecdd3'; text = '#e11d48'; }
-                    if (ev.color === 'amber') { bg = '#fef3c7'; border = '#fde68a'; text = '#b45309'; }
-                    if (ev.color === 'purple') { bg = '#f3e8ff'; border = '#e9d5ff'; text = '#7e22ce'; }
+                dayDiv.style.cssText = 'padding:12px 0; border-bottom:1px solid #e2e8f0; background-color:#ffffff;';
 
-                    return `<div style="background:${bg}; border:1px solid ${border}; color:${text}; border-radius:6px; padding:8px 12px; margin-bottom:6px;">
-                        <div style="font-weight:700; opacity:0.8; font-size:12px; margin-bottom:2px;">${timeText}</div>
-                        <div style="font-weight:700; font-size:15px;">${ev.title}</div>
-                        ${ev.desc ? '<div style="font-size:12px; opacity:0.7; margin-top:2px;">' + ev.desc + '</div>' : ''}
-                    </div>`;
+                // ★ シンプルなスタイルで文字色を全要素に明示的に指定
+                let eventsHtml = events.map(ev => {
+                    const timeText = ev.isAllDay ? '終日' : `${ev.startTime} ～ ${ev.endTime}`;
+                    let bg = '#f1f5f9', border = '#cbd5e1', textColor = '#1e293b';
+                    if (ev.color === 'sky') { bg = '#e0f2fe'; border = '#bae6fd'; textColor = '#0369a1'; }
+                    if (ev.color === 'emerald') { bg = '#d1fae5'; border = '#a7f3d0'; textColor = '#047857'; }
+                    if (ev.color === 'rose') { bg = '#ffe4e6'; border = '#fecdd3'; textColor = '#e11d48'; }
+                    if (ev.color === 'amber') { bg = '#fef3c7'; border = '#fde68a'; textColor = '#b45309'; }
+                    if (ev.color === 'purple') { bg = '#f3e8ff'; border = '#e9d5ff'; textColor = '#7e22ce'; }
+
+                    return '<div style="background-color:' + bg + '; border:1px solid ' + border + '; border-radius:6px; padding:8px 12px; margin-bottom:6px;">' +
+                        '<div style="font-weight:700; font-size:12px; margin-bottom:2px; color:' + textColor + ';">' + timeText + '</div>' +
+                        '<div style="font-weight:700; font-size:15px; color:' + textColor + ';">' + ev.title + '</div>' +
+                        (ev.desc ? '<div style="font-size:12px; margin-top:2px; color:' + textColor + ';">' + ev.desc + '</div>' : '') +
+                        '</div>';
                 }).join('');
 
-                dayDiv.innerHTML = `<div style="font-size:15px; font-weight:700; margin-bottom:8px; color:${hdrColor};">${m}/${day} (${dowNames[d.getDay()]})</div>${eventsHtml}`;
+                dayDiv.innerHTML = '<div style="font-size:15px; font-weight:700; margin-bottom:8px; color:' + hdrColor + '; background-color:#ffffff;">' + m + '/' + day + ' (' + dowNames[d.getDay()] + ')</div>' + eventsHtml;
                 capture.appendChild(dayDiv);
             }
 
             if (!hasEvents) {
-                capture.innerHTML += '<div style="text-align:center; color:#94a3b8; padding:40px 0; font-size:15px;">この月には予定がありません</div>';
+                capture.innerHTML += '<div style="text-align:center; color:#94a3b8; padding:40px 0; font-size:15px; background-color:#ffffff;">この月には予定がありません</div>';
             }
         }
 
         function renderCaptureCalendarGrid(capture, y, m) {
             capture.style.width = '1200px';
             const gridContainer = document.createElement('div');
-            gridContainer.style.display = 'block';
-            gridContainer.style.background = '#ffffff';
-            gridContainer.style.borderRadius = '12px';
-            gridContainer.style.border = '1px solid #e2e8f0';
-            gridContainer.style.overflow = 'hidden';
+            gridContainer.style.cssText = 'display:block; background-color:#ffffff; border-radius:12px; border:1px solid #e2e8f0;';
 
             const firstDay = new Date(y, m - 1, 1).getDay();
             const daysCount = new Date(y, m, 0).getDate();
-            const todayStr = fmt(new Date());
 
-            let html = `
-                <div style="display:flex; background:#f8fafc; border-bottom: 1px solid #e2e8f0; font-weight: bold; font-size: 14px;">
-                    <div style="width:14.285%; padding:12px 0; text-align:center; border-right: 1px solid #e2e8f0; color:#ef4444; box-sizing:border-box;">日</div>
-                    <div style="width:14.285%; padding:12px 0; text-align:center; border-right: 1px solid #e2e8f0; color:#1e293b; box-sizing:border-box;">月</div>
-                    <div style="width:14.285%; padding:12px 0; text-align:center; border-right: 1px solid #e2e8f0; color:#1e293b; box-sizing:border-box;">火</div>
-                    <div style="width:14.285%; padding:12px 0; text-align:center; border-right: 1px solid #e2e8f0; color:#1e293b; box-sizing:border-box;">水</div>
-                    <div style="width:14.285%; padding:12px 0; text-align:center; border-right: 1px solid #e2e8f0; color:#1e293b; box-sizing:border-box;">木</div>
-                    <div style="width:14.285%; padding:12px 0; text-align:center; border-right: 1px solid #e2e8f0; color:#1e293b; box-sizing:border-box;">金</div>
-                    <div style="width:14.285%; padding:12px 0; text-align:center; color:#0ea5e9; box-sizing:border-box;">土</div>
-                </div>
-                <div style="display:flex; flex-wrap:wrap; background:#e2e8f0; border-left: 1px solid #e2e8f0; border-top: 1px solid #e2e8f0;">
-            `;
+            // ★ 曜日ヘッダー（シンプルなdiv並び）
+            let html = '<div style="background-color:#f8fafc; border-bottom:1px solid #e2e8f0; font-weight:bold; font-size:14px; display:flex;">';
+            const dowLabels = ['日', '月', '火', '水', '木', '金', '土'];
+            const dowColors = ['#ef4444', '#1e293b', '#1e293b', '#1e293b', '#1e293b', '#1e293b', '#0ea5e9'];
+            for (let i = 0; i < 7; i++) {
+                html += '<div style="width:14.285%; padding:12px 0; text-align:center; color:' + dowColors[i] + '; box-sizing:border-box; background-color:#f8fafc;' + (i < 6 ? ' border-right:1px solid #e2e8f0;' : '') + '">' + dowLabels[i] + '</div>';
+            }
+            html += '</div>';
+
+            // ★ カレンダーセル（シンプルなblockレイアウト、flexboxは使わない）
+            html += '<div style="display:flex; flex-wrap:wrap; border-left:1px solid #e2e8f0; border-top:1px solid #e2e8f0; background-color:#e2e8f0;">';
 
             for (let i = 0; i < firstDay; i++) {
-                html += `<div style="width:14.285%; background:#f8fafc; min-height:140px; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; box-sizing:border-box;"></div>`;
+                html += '<div style="width:14.285%; min-height:120px; background-color:#f8fafc; border-right:1px solid #e2e8f0; border-bottom:1px solid #e2e8f0; box-sizing:border-box;"></div>';
             }
 
             for (let day = 1; day <= daysCount; day++) {
@@ -2703,31 +2859,36 @@
                 if (dow === 6) dayColor = '#0ea5e9';
 
                 const events = eventsList.filter(e => e.date === ds).sort((a, b) => a.startTime.localeCompare(b.startTime));
-                let evHtml = events.map(ev => {
-                    const timeText = ev.isAllDay ? '終日' : `${ev.startTime}～${ev.endTime}`;
-                    let bg = '#e0f2fe', border = '#bae6fd', text = '#0369a1';
-                    if (ev.color === 'emerald') { bg = '#d1fae5'; border = '#a7f3d0'; text = '#047857'; }
-                    if (ev.color === 'rose') { bg = '#ffe4e6'; border = '#fecdd3'; text = '#e11d48'; }
-                    if (ev.color === 'amber') { bg = '#fef3c7'; border = '#fde68a'; text = '#b45309'; }
-                    if (ev.color === 'purple') { bg = '#f3e8ff'; border = '#e9d5ff'; text = '#7e22ce'; }
 
-                    return `<div style="background:${bg}; border:1px solid ${border}; color:${text}; border-radius:6px; padding:6px; margin-bottom:6px; font-size:11px; line-height:1.3; overflow:hidden;">
-                        <div style="font-weight:700; opacity:0.85;">${timeText}</div>
-                        <div style="font-weight:700;">${ev.title}</div>
-                    </div>`;
-                }).join('');
+                // ★ 各予定をシンプルな構造で生成（全要素に明示的にcolorとbackground-colorを指定）
+                let evHtml = '';
+                for (let ei = 0; ei < events.length; ei++) {
+                    const ev = events[ei];
+                    const timeText = ev.isAllDay ? '終日' : ev.startTime + '～' + ev.endTime;
+                    let bg = '#e0f2fe', bdr = '#bae6fd', tc = '#0369a1';
+                    if (ev.color === 'emerald') { bg = '#d1fae5'; bdr = '#a7f3d0'; tc = '#047857'; }
+                    if (ev.color === 'rose') { bg = '#ffe4e6'; bdr = '#fecdd3'; tc = '#e11d48'; }
+                    if (ev.color === 'amber') { bg = '#fef3c7'; bdr = '#fde68a'; tc = '#b45309'; }
+                    if (ev.color === 'purple') { bg = '#f3e8ff'; bdr = '#e9d5ff'; tc = '#7e22ce'; }
 
-                html += `<div style="width:14.285%; background:#ffffff; min-height:140px; padding:8px; display:flex; flex-direction:column; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; box-sizing:border-box; overflow:hidden;">
-                    <div style="text-align:right; font-weight:700; font-size:14px; color:${dayColor}; margin-bottom:6px;">${day}</div>
-                    <div style="flex:1;">${evHtml}</div>
-                </div>`;
+                    evHtml += '<div style="background-color:' + bg + '; border:1px solid ' + bdr + '; border-radius:4px; padding:4px 6px; margin-bottom:4px; font-size:11px; line-height:1.3;">' +
+                        '<div style="font-weight:700; font-size:10px; color:' + tc + ';">' + timeText + '</div>' +
+                        '<div style="font-weight:700; font-size:11px; color:' + tc + ';">' + ev.title + '</div>' +
+                        '</div>';
+                }
+
+                // ★ セル本体（display:blockでシンプルに、overflowなし）
+                html += '<div style="width:14.285%; min-height:120px; padding:6px; background-color:#ffffff; border-right:1px solid #e2e8f0; border-bottom:1px solid #e2e8f0; box-sizing:border-box;">' +
+                    '<div style="text-align:right; font-weight:700; font-size:13px; color:' + dayColor + '; margin-bottom:4px; background-color:#ffffff;">' + day + '</div>' +
+                    evHtml +
+                    '</div>';
             }
 
             const rem = (firstDay + daysCount) % 7 === 0 ? 0 : 7 - ((firstDay + daysCount) % 7);
             for (let i = 0; i < rem; i++) {
-                html += `<div style="width:14.285%; background:#f8fafc; min-height:140px; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; box-sizing:border-box;"></div>`;
+                html += '<div style="width:14.285%; min-height:120px; background-color:#f8fafc; border-right:1px solid #e2e8f0; border-bottom:1px solid #e2e8f0; box-sizing:border-box;"></div>';
             }
-            html += `</div>`;
+            html += '</div>';
             gridContainer.innerHTML = html;
             capture.appendChild(gridContainer);
         }
